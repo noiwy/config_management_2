@@ -22,10 +22,8 @@ def get_test_deps(repo_path: str, pkg: str) -> List[str]:
     try:
         with open(repo_path, "r", encoding="utf-8") as file:
             data = json.load(file)
-            # В тестовом графе пакеты названы большими буквами
             return data.get(pkg.upper(), [])
     except (FileNotFoundError, json.JSONDecodeError):
-        print(f"Ошибка файла: {repo_path}", file=sys.stderr)
         return []
 
 
@@ -39,13 +37,13 @@ def get_direct_deps(repo: str, pkg: str, ver: str, test_mode: bool) -> List[str]
         with urllib.request.urlopen(url) as res:
             data = json.loads(res.read().decode("utf-8"))
             deps = [dep["crate_id"] for dep in data.get("dependencies", [])]
-            return list(set(deps))  # Убираем дубликаты
+            return list(set(deps))
     except (HTTPError, URLError, json.JSONDecodeError):
         return []
 
 
 def bfs_recursive(queue: List[Tuple[str, str]], graph: Dict[str, List[str]], 
-                  visited: Set[str], repo: str, test_mode: bool) -> None:
+                  visited: Set[str], order: List[str], repo: str, test_mode: bool) -> None:
     """Рекурсивный обход BFS для построения полного графа."""
     if not queue:
         return
@@ -53,38 +51,40 @@ def bfs_recursive(queue: List[Tuple[str, str]], graph: Dict[str, List[str]],
     pkg, ver = queue.pop(0)
     
     if pkg in visited:
-        bfs_recursive(queue, graph, visited, repo, test_mode)
+        bfs_recursive(queue, graph, visited, order, repo, test_mode)
         return
         
     visited.add(pkg)
+    order.append(pkg)
     deps = get_direct_deps(repo, pkg, ver, test_mode)
     graph[pkg] = deps
     
     for dep in deps:
         if dep not in visited and dep not in [q[0] for q in queue]:
-            # В реальности нужна точная версия, для графа передаем заглушку
             queue.append((dep, "1.0.0"))
             
-    bfs_recursive(queue, graph, visited, repo, test_mode)
+    bfs_recursive(queue, graph, visited, order, repo, test_mode)
 
 
 def main() -> None:
-    """Главная функция приложения (Этап 3)."""
+    """Главная функция приложения."""
     parser = get_arg_parser()
     try:
         args = parser.parse_args()
         
         graph: Dict[str, List[str]] = {}
         visited: Set[str] = set()
+        order: List[str] = []
         queue = [(args.package, args.version)]
         
-        bfs_recursive(queue, graph, visited, args.repo, args.test_mode)
+        # Запуск алгоритма
+        bfs_recursive(queue, graph, visited, order, args.repo, args.test_mode)
         
-        print(f"--- Граф зависимостей {args.package} ---")
-        print(json.dumps(graph, indent=2, ensure_ascii=False))
+        # Вывод порядка загрузки для 4 этапа
+        print(f"\nПорядок загрузки пакетов (Этап 4):")
+        print(" -> ".join(order))
         
     except SystemExit as err:
-        print("Ошибка ввода. Проверьте флаги.", file=sys.stderr)
         sys.exit(err.code)
 
 
