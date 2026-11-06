@@ -66,6 +66,34 @@ def bfs_recursive(queue: List[Tuple[str, str]], graph: Dict[str, List[str]],
     bfs_recursive(queue, graph, visited, order, repo, test_mode)
 
 
+def print_d2_graph(graph: Dict[str, List[str]]) -> None:
+    """Выводит граф в формате языка диаграмм D2 на экран."""
+    print("\n--- Код для диаграммы D2 (Этап 5) ---")
+    for pkg, deps in graph.items():
+        if not deps:
+            print(f"{pkg}")
+        for dep in deps:
+            print(f"{pkg} -> {dep}")
+    print("-------------------------------------\n")
+
+
+def print_ascii_tree(graph: Dict[str, List[str]], node: str, prefix: str, 
+                     visited: Set[str]) -> None:
+    """Рекурсивно выводит ASCII-дерево зависимостей."""
+    if node in visited:
+        print(prefix + f"└── {node} (уже в дереве/цикл)")
+        return
+        
+    visited.add(node)
+    print(prefix + f"└── {node}")
+    deps = graph.get(node, [])
+    
+    for i, dep in enumerate(deps):
+        is_last = (i == len(deps) - 1)
+        next_prefix = prefix + ("    " if is_last else "│   ")
+        print_ascii_tree(graph, dep, next_prefix, visited.copy())
+
+
 def main() -> None:
     """Главная функция приложения."""
     parser = get_arg_parser()
@@ -77,13 +105,21 @@ def main() -> None:
         order: List[str] = []
         queue = [(args.package, args.version)]
         
-        # Запуск алгоритма
+        # Строим граф
         bfs_recursive(queue, graph, visited, order, args.repo, args.test_mode)
         
-        # Вывод порядка загрузки для 4 этапа
-        print(f"\nПорядок загрузки пакетов (Этап 4):")
+        # Вывод порядка (Этап 4)
+        print(f"Порядок загрузки пакетов:")
         print(" -> ".join(order))
         
+        # Вывод диаграммы D2 (Этап 5)
+        print_d2_graph(graph)
+        
+        # Вывод ASCII-дерева (Этап 5)
+        if args.ascii:
+            print("--- ASCII-дерево зависимостей ---")
+            print_ascii_tree(graph, args.package, "", set())
+            
     except SystemExit as err:
         sys.exit(err.code)
 
