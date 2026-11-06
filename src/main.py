@@ -1,5 +1,9 @@
 import argparse
 import sys
+import json
+import urllib.request
+from urllib.error import URLError, HTTPError
+from typing import List
 
 
 def get_arg_parser() -> argparse.ArgumentParser:
@@ -24,16 +28,44 @@ def print_config(args: argparse.Namespace) -> None:
     print("----------------------------\n")
 
 
+def get_direct_dependencies(repo: str, pkg: str, ver: str) -> List[str]:
+    """Получает прямые зависимости конкретной версии пакета через API."""
+    url = f"{repo}/{pkg}/{ver}/dependencies"
+    try:
+        with urllib.request.urlopen(url) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            # В API crates.io зависимости лежат в массиве dependencies
+            return [dep["crate_id"] for dep in data.get("dependencies", [])]
+    except HTTPError as err:
+        print(f"Ошибка HTTP {err.code}: Не удалось найти пакет {pkg} v{ver}.")
+        return []
+    except URLError as err:
+        print(f"Ошибка сети: {err.reason}.")
+        return []
+    except json.JSONDecodeError:
+        print("Ошибка обработки данных (неверный JSON).")
+        return []
+
+
 def main() -> None:
-    """Главная функция запуска прототипа с обработкой ошибок."""
+    """Главная функция запуска приложения с получением зависимостей."""
     parser = get_arg_parser()
     try:
-        # Пытаемся распарсить переданные аргументы
         args = parser.parse_args()
         print_config(args)
+        
+        # Получение и вывод зависимостей для 2 этапа
+        print(f"Прямые зависимости пакета {args.package} (v{args.version}):")
+        dependencies = get_direct_dependencies(args.repo, args.package, args.version)
+        
+        if dependencies:
+            for dep in dependencies:
+                print(f"- {dep}")
+        else:
+            print("Прямых зависимостей нет, или пакет не найден.")
+            
     except SystemExit as err:
-        # Демонстрация перехвата и обработки ошибок ввода
-        print(f"Ошибка ввода параметров. Убедитесь, что переданы все флаги.", file=sys.stderr)
+        print("Ошибка ввода параметров. Убедитесь, что переданы все флаги.", file=sys.stderr)
         sys.exit(err.code)
 
 
